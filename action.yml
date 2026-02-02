@@ -134,10 +134,10 @@ runs:
 
         echo "Initialize inputs"
 
-        local_path_unslash=$(echo "${{inputs.local-path}}" | sed 's:/*$::' | sed 's/^"//;s/"$//')
+        local_path_unslash=$(echo "${{inputs.local-path}}" | sed 's:/*$::')
         local_path_slash="${local_path_unslash}/"
-        
-        remote_path_unslash=$(echo "${{inputs.remote-path}}" | sed 's:/*$::' | sed 's/^"//;s/"$//')
+
+        remote_path_unslash="${{inputs.remote-path}}"
         remote_path_slash="${remote_path_unslash}/"
 
         input_remote_password="${{inputs.remote-password}}"
@@ -373,25 +373,29 @@ runs:
             rm -f \"${remote_path_slash}.deploy-running\";
             ${{inputs.ftp-post-sync-commands}}"
         else
-          # Strip any embedded quotes from paths
-          clean_remote_unslash="${remote_path_unslash//\"/}"
-          clean_remote_slash="${remote_path_slash//\"/}"
-          clean_local_unslash="${local_path_unslash//\"/}"
-          clean_local_slash="${local_path_slash//\"/}"
+          # Create file lists with proper escaping
+          while IFS= read -r file; do
+            # Escape special characters for lftp
+            escaped_file=$(printf '%s' "$file" | sed 's/\[/\\[/g; s/\]/\\]/g')
+            echo "$escaped_file"
+          done < ~/files_to_upload > ~/files_to_upload_escaped
           
-          # Escape square brackets in file paths
-          files_list=$(awk '{ gsub(/\[/, "\\["); gsub(/\]/, "\\]"); printf "%s ", $0 }' ~/files_to_upload)
-          delete_list=$(awk -v REMOTEPATH="${clean_remote_slash}" '{ gsub(/\[/, "\\["); gsub(/\]/, "\\]"); printf "%s%s ", REMOTEPATH, $0 }' ~/files_to_delete)
+          while IFS= read -r file; do
+            escaped_file=$(printf '%s' "$file" | sed 's/\[/\\[/g; s/\]/\\]/g')
+            echo "${remote_path_slash}${escaped_file}"
+          done < ~/files_to_delete > ~/files_to_delete_escaped
           
-          ${proxy_cmd} lftp <<EOF
-            lcd ${clean_local_unslash}
-            put -O ${clean_remote_unslash} ${clean_local_slash}.deploy-running
-            mput -d -O ${clean_remote_unslash} .deploy-revision ${files_list}
-            rm -f ${clean_remote_slash}.deploy-check ${delete_list}
-            rm -f ${clean_remote_slash}.deploy-running
-            ${{inputs.ftp-post-sync-commands}}
-            bye
-            EOF
+          # Read file lists into variables
+          upload_files=$(tr '\n' ' ' < ~/files_to_upload_escaped)
+          delete_files=$(tr '\n' ' ' < ~/files_to_delete_escaped)
+          
+          ${proxy_cmd} lftp -c "
+            lcd \"${local_path_unslash}\";
+            put -O \"${remote_path_unslash}\" \"${local_path_slash}.deploy-running\";
+            mput -d -O \"${remote_path_unslash}\" .deploy-revision ${upload_files};
+            rm -f \"${remote_path_slash}.deploy-check\" ${delete_files};
+            rm -f \"${remote_path_slash}.deploy-running\";
+            ${{inputs.ftp-post-sync-commands}}"
         fi
 
         [ -f ~/transfer_log.txt ] && cat ~/transfer_log.txt
