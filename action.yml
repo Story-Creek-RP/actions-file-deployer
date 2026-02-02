@@ -134,10 +134,10 @@ runs:
 
         echo "Initialize inputs"
 
-        local_path_unslash=$(echo "${{inputs.local-path}}" | sed 's:/*$::')
+        local_path_unslash=$(echo "${{inputs.local-path}}" | sed 's:/*$::' | sed 's/^"//;s/"$//')
         local_path_slash="${local_path_unslash}/"
-
-        remote_path_unslash="${{inputs.remote-path}}"
+        
+        remote_path_unslash=$(echo "${{inputs.remote-path}}" | sed 's:/*$::' | sed 's/^"//;s/"$//')
         remote_path_slash="${remote_path_unslash}/"
 
         input_remote_password="${{inputs.remote-password}}"
