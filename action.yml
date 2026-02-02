@@ -373,8 +373,9 @@ runs:
             rm -f \"${remote_path_slash}.deploy-running\";
             ${{inputs.ftp-post-sync-commands}}"
         else
-          files_list=$(cat ~/files_to_upload)
-          delete_list=$(awk -v REMOTEPATH="${remote_path_slash}" '{ printf "%s%s ", REMOTEPATH, $0 }' ~/files_to_delete)
+          # Escape square brackets in file paths for lftp glob patterns
+          files_list=$(awk '{ gsub(/\[/, "\\["); gsub(/\]/, "\\]"); printf "%s ", $0 }' ~/files_to_upload)
+          delete_list=$(awk -v REMOTEPATH="${remote_path_slash}" '{ gsub(/\[/, "\\["); gsub(/\]/, "\\]"); printf "%s%s ", REMOTEPATH, $0 }' ~/files_to_delete)
           
           ${proxy_cmd} lftp -c "lcd \"${local_path_unslash}\";
             put -O \"${remote_path_unslash}\" \"${local_path_slash}.deploy-running\";
