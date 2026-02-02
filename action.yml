@@ -373,19 +373,25 @@ runs:
             rm -f \"${remote_path_slash}.deploy-running\";
             ${{inputs.ftp-post-sync-commands}}"
         else
+          # Strip any embedded quotes from paths
+          clean_remote_unslash="${remote_path_unslash//\"/}"
+          clean_remote_slash="${remote_path_slash//\"/}"
+          clean_local_unslash="${local_path_unslash//\"/}"
+          clean_local_slash="${local_path_slash//\"/}"
+          
           # Escape square brackets in file paths
           files_list=$(awk '{ gsub(/\[/, "\\["); gsub(/\]/, "\\]"); printf "%s ", $0 }' ~/files_to_upload)
-          delete_list=$(awk -v REMOTEPATH="${remote_path_slash}" '{ gsub(/\[/, "\\["); gsub(/\]/, "\\]"); printf "%s%s ", REMOTEPATH, $0 }' ~/files_to_delete)
+          delete_list=$(awk -v REMOTEPATH="${clean_remote_slash}" '{ gsub(/\[/, "\\["); gsub(/\]/, "\\]"); printf "%s%s ", REMOTEPATH, $0 }' ~/files_to_delete)
           
-          ${proxy_cmd} lftp -e "
-            lcd ${local_path_unslash};
-            put -O ${remote_path_unslash} ${local_path_slash}.deploy-running;
-            mput -d -O ${remote_path_unslash} .deploy-revision ${files_list};
-            rm -f ${remote_path_slash}.deploy-check ${delete_list};
-            rm -f ${remote_path_slash}.deploy-running;
-            ${{inputs.ftp-post-sync-commands}};
+          ${proxy_cmd} lftp <<EOF
+            lcd ${clean_local_unslash}
+            put -O ${clean_remote_unslash} ${clean_local_slash}.deploy-running
+            mput -d -O ${clean_remote_unslash} .deploy-revision ${files_list}
+            rm -f ${clean_remote_slash}.deploy-check ${delete_list}
+            rm -f ${clean_remote_slash}.deploy-running
+            ${{inputs.ftp-post-sync-commands}}
             bye
-          "
+            EOF
         fi
 
         [ -f ~/transfer_log.txt ] && cat ~/transfer_log.txt
